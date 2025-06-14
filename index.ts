@@ -11,12 +11,24 @@ app.get("/health", (_, res) => {
 });
 
 const POKEMON_NAMES = [
-  "Pikachu", "Charmander", "Bulbasaur", "Squirtle", "Jigglypuff",
-  "Meowth", "Psyduck", "Snorlax", "Gengar", "Eevee",
-  "Vulpix", "Machop", "Gastly", "Onix", "Lapras",
+  "Pikachu",
+  "Charmander",
+  "Bulbasaur",
+  "Squirtle",
+  "Jigglypuff",
+  "Meowth",
+  "Psyduck",
+  "Snorlax",
+  "Gengar",
+  "Eevee",
+  "Vulpix",
+  "Machop",
+  "Gastly",
+  "Onix",
+  "Lapras",
 ];
 
-function getRandomName(existing: string[]) {
+function getRandomName(existing: string[]): string {
   const unused = POKEMON_NAMES.filter((n) => !existing.includes(n));
   return unused.length
     ? unused[Math.floor(Math.random() * unused.length)]
@@ -39,7 +51,6 @@ io.on("connection", (socket: Socket) => {
 
   socket.on("join-room", (roomId: string) => {
     console.log(`➡️ ${socket.id} requesting to join room ${roomId}`);
-
     socket.join(roomId);
 
     if (!rooms[roomId]) rooms[roomId] = [];
@@ -52,7 +63,9 @@ io.on("connection", (socket: Socket) => {
     userNames[socket.id] = name;
 
     console.log(`👤 ${socket.id} assigned name: ${name}`);
-    console.log(`📦 Room ${roomId} now has ${rooms[roomId].length} participant(s)`);
+    console.log(
+      `📦 Room ${roomId} now has ${rooms[roomId].length} participant(s)`
+    );
 
     const otherUsers = rooms[roomId].filter((id) => id !== socket.id);
     socket.emit("all-users", otherUsers);
@@ -61,47 +74,52 @@ io.on("connection", (socket: Socket) => {
       userId: socket.id,
       userName: name,
     });
-    console.log(`📣 Broadcasted join of ${socket.id} to others in room ${roomId}`);
+
+    console.log(
+      `📣 Broadcasted join of ${socket.id} to others in room ${roomId}`
+    );
   });
 
-  socket.on("sending-signal", (payload) => {
-    console.log(`📡 ${socket.id} sending signal to ${payload.userToSignal}`);
-    io.to(payload.userToSignal).emit("user-joined", {
-      signal: payload.signal,
-      callerId: socket.id,
-    });
-  });
+  socket.on(
+    "sending-signal",
+    (payload: { userToSignal: string; signal: any; callerId?: string }) => {
+      console.log(`📡 ${socket.id} sending signal to ${payload.userToSignal}`);
+      io.to(payload.userToSignal).emit("user-joined", {
+        signal: payload.signal,
+        callerId: socket.id,
+      });
+    }
+  );
 
-  socket.on("returning-signal", (payload) => {
-    console.log(`📶 ${socket.id} returning signal to ${payload.callerId}`);
-    io.to(payload.callerId).emit("receiving-returned-signal", {
-      signal: payload.signal,
-      id: socket.id,
-    });
-  });
+  socket.on(
+    "returning-signal",
+    (payload: { signal: any; callerId: string }) => {
+      console.log(`📶 ${socket.id} returning signal to ${payload.callerId}`);
+      io.to(payload.callerId).emit("receiving-returned-signal", {
+        signal: payload.signal,
+        id: socket.id,
+      });
+    }
+  );
 
   socket.on("chat-message", (msg: string) => {
     const name = userNames[socket.id] || "Unknown";
     const message = `${name}: ${msg}`;
-    let found = false;
     for (const roomId in rooms) {
       if (rooms[roomId].includes(socket.id)) {
         io.to(roomId).emit("chat-message", message);
         console.log(`💬 ${name} in room ${roomId}: "${msg}"`);
-        found = true;
         break;
       }
-    }
-    if (!found) {
-      console.warn(`⚠️ ${socket.id} tried to send a message without joining a room`);
     }
   });
 
   socket.on("disconnect", () => {
     console.log(`❌ Disconnected: ${socket.id}`);
     for (const roomId in rooms) {
-      if (rooms[roomId].includes(socket.id)) {
-        rooms[roomId] = rooms[roomId].filter((id) => id !== socket.id);
+      const index = rooms[roomId].indexOf(socket.id);
+      if (index !== -1) {
+        rooms[roomId].splice(index, 1);
         io.to(roomId).emit("user-left", socket.id);
         console.log(`📤 ${socket.id} left room ${roomId}`);
 
@@ -109,10 +127,13 @@ io.on("connection", (socket: Socket) => {
           delete rooms[roomId];
           console.log(`🧹 Cleaned empty room ${roomId}`);
         } else {
-          console.log(`📦 Room ${roomId} now has ${rooms[roomId].length} user(s)`);
+          console.log(
+            `📦 Room ${roomId} now has ${rooms[roomId].length} user(s)`
+          );
         }
       }
     }
+
     delete userNames[socket.id];
   });
 });
