@@ -4,81 +4,118 @@ import { Server, Socket } from "socket.io";
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: { origin: "*" },
-});
+const io = new Server(server, { cors: { origin: "*" } });
 
-// Health check route
 app.get("/health", (_, res) => {
   res.status(200).json({ message: "Service is up and running 🚀" });
 });
 
-// Types
-interface SignalPayload {
-  userToSignal: string;
-  signal: any;
-  callerId?: string;
-}
+const POKEMON_NAMES = [
+  "Pikachu",
+  "Charmander",
+  "Bulbasaur",
+  "Squirtle",
+  "Jigglypuff",
+  "Meowth",
+  "Psyduck",
+  "Snorlax",
+  "Gengar",
+  "Eevee",
+  "Vulpix",
+  "Machop",
+  "Gastly",
+  "Onix",
+  "Lapras",
+];
 
-interface ReturningSignalPayload {
-  signal: any;
-  callerId: string;
+function getRandomName(existing: string[]) {
+  const unused = POKEMON_NAMES.filter((n) => !existing.includes(n));
+  return unused.length
+    ? unused[Math.floor(Math.random() * unused.length)]
+    : `Trainer${Date.now()}`;
 }
 
 interface Rooms {
-  [roomId: string]: string[];
+  [roomId: string]: string[]; // socket.id[]
+}
+
+interface UserNames {
+  [socketId: string]: string;
 }
 
 const rooms: Rooms = {};
+const userNames: UserNames = {};
 
 io.on("connection", (socket: Socket) => {
-  console.log("🔌 Socket connected:", socket.id);
+  console.log("🔌 Connected:", socket.id);
 
   socket.on("join-room", (roomId: string) => {
-    console.log(`➡️  ${socket.id} joining room ${roomId}`);
+    console.log(`➡️ ${socket.id} joining ${roomId}`);
+    socket.join(roomId);
 
-    socket.join(roomId); // Optional for future room-wide broadcasts
-
+    // Add to room
     if (!rooms[roomId]) rooms[roomId] = [];
-
     if (!rooms[roomId].includes(socket.id)) {
       rooms[roomId].push(socket.id);
     }
 
+    // Assign unique name
+    const currentNames = Object.values(userNames);
+    const name = getRandomName(currentNames);
+    userNames[socket.id] = name;
+
+    // Notify new user of existing users
     const otherUsers = rooms[roomId].filter((id) => id !== socket.id);
     socket.emit("all-users", otherUsers);
+
+    // Notify others about the new user
+    socket.to(roomId).emit("user-joined-room", {
+      userId: socket.id,
+      userName: name,
+    });
   });
 
-  socket.on("sending-signal", (payload: SignalPayload) => {
-    console.log(`📤 ${socket.id} sending signal to ${payload.userToSignal}`);
+  socket.on("sending-signal", (payload) => {
     io.to(payload.userToSignal).emit("user-joined", {
       signal: payload.signal,
       callerId: socket.id,
     });
   });
 
-  socket.on("returning-signal", (payload: ReturningSignalPayload) => {
-    console.log(`📥 ${socket.id} returning signal to ${payload.callerId}`);
+  socket.on("returning-signal", (payload) => {
     io.to(payload.callerId).emit("receiving-returned-signal", {
       signal: payload.signal,
       id: socket.id,
     });
   });
 
+  socket.on("chat-message", (msg: string) => {
+    const name = userNames[socket.id] || "Unknown";
+    const message = `${name}: ${msg}`;
+    for (const roomId in rooms) {
+      if (rooms[roomId].includes(socket.id)) {
+        io.to(roomId).emit("chat-message", message);
+        break;
+      }
+    }
+  });
+
   socket.on("disconnect", () => {
-    console.log(`❌ Socket disconnected: ${socket.id}`);
+    console.log(`❌ Disconnected: ${socket.id}`);
     for (const roomId in rooms) {
       rooms[roomId] = rooms[roomId].filter((id) => id !== socket.id);
       if (rooms[roomId].length === 0) {
         delete rooms[roomId];
-        console.log(`🧹 Room ${roomId} cleaned up`);
+        console.log(`🧹 Cleaned empty room ${roomId}`);
+      } else {
+        io.to(roomId).emit("user-left", socket.id);
       }
     }
+    delete userNames[socket.id];
   });
 });
 
-// Start server
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
-  console.log(`✅ WebRTC signaling server running at http://localhost:${PORT}`);
+  console.log(`✅ Signaling server listening on http://localhost:${PORT}`);
 });
