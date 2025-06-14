@@ -1,11 +1,15 @@
-const express = require("express");
-const http = require("http");
-const { Server } = require("socket.io");
+import express from "express";
+import http from "http";
+import { Server, Socket } from "socket.io";
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: "*" },
+});
+
+app.get("/health", (_, res) => {
+  res.status(200).json({ message: "Service is up and running 🚀" });
 });
 
 interface SignalPayload {
@@ -25,7 +29,7 @@ interface Rooms {
 
 const rooms: Rooms = {};
 
-io.on("connection", (socket: import("socket.io").Socket) => {
+io.on("connection", (socket: Socket) => {
   socket.on("join-room", (roomId: string) => {
     if (!rooms[roomId]) rooms[roomId] = [];
     rooms[roomId].push(socket.id);
@@ -53,4 +57,8 @@ io.on("connection", (socket: import("socket.io").Socket) => {
   });
 });
 
-server.listen(process.env.PORT, () => console.log("Server running on port 3001"));
+// Start server with env-based fallback
+const PORT = process.env.PORT || 3001;
+server.listen(PORT, () => {
+  console.log(`✅ WebRTC signaling server running at http://localhost:${PORT}`);
+});
