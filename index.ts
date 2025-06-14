@@ -53,4 +53,4 @@ io.on("connection", (socket: import("socket.io").Socket) => {
   });
 });
 
-server.listen(3001, () => console.log("Server running on port 3001"));
+server.listen(process.env.PORT, () => console.log("Server running on port 3001"));
