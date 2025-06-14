@@ -6,7 +6,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: ["https://qasr-three.vercel.app", "http://localhost:3000"],
+    origin: true,
   },
 });
 
