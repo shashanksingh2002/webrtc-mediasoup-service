@@ -7,14 +7,14 @@ const server = http.createServer(app);
 
 // ─── Enable CORS with credentials ───────────────────────────────────────────
 const io = new Server(server, {
+  path: "/socket.io",
+  transports: ["websocket","polling"],  // polling is fallback but WS will be tried first
   cors: {
-    origin: [
-      "https://qasr-three.vercel.app",
-      "http://localhost:3000", // for local dev
-    ],
+    origin: ["https://qasr-three.vercel.app","http://localhost:3000"],
     credentials: true,
   },
 });
+io.engine.on("connection_error", (err) => console.error("Engine error:", err));
 
 app.get("/health", (_, res) => {
   res.status(200).json({ message: "Service is up and running 🚀" });
