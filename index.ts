@@ -40,7 +40,6 @@ function getRandomName(existing: string[]): string {
 interface Rooms {
   [roomId: string]: string[];
 }
-
 interface UserNames {
   [socketId: string]: string;
 }
@@ -55,28 +54,30 @@ io.on("connection", (socket: Socket) => {
     console.log(`➡️ ${socket.id} requesting to join room ${roomId}`);
     socket.join(roomId);
 
+    // initialize room
     if (!rooms[roomId]) rooms[roomId] = [];
     if (!rooms[roomId].includes(socket.id)) {
       rooms[roomId].push(socket.id);
     }
 
+    // assign name
     const currentNames = Object.values(userNames);
     const name = getRandomName(currentNames);
     userNames[socket.id] = name;
-
     console.log(`👤 ${socket.id} assigned name: ${name}`);
-    console.log(
-      `📦 Room ${roomId} now has ${rooms[roomId].length} participant(s)`
-    );
 
-    const otherUsers = rooms[roomId].filter((id) => id !== socket.id);
+    // emit full user objects to the newcomer
+    const otherUsers = rooms[roomId]
+      .filter((id) => id !== socket.id)
+      .map((id) => ({ userId: id, userName: userNames[id] }));
+    console.log(`📦 Emitting all-users to ${socket.id}:`, otherUsers);
     socket.emit("all-users", otherUsers);
 
+    // notify existing peers
     socket.to(roomId).emit("user-joined-room", {
       userId: socket.id,
       userName: name,
     });
-
     console.log(
       `📣 Broadcasted join of ${socket.id} to others in room ${roomId}`
     );
@@ -119,23 +120,17 @@ io.on("connection", (socket: Socket) => {
   socket.on("disconnect", () => {
     console.log(`❌ Disconnected: ${socket.id}`);
     for (const roomId in rooms) {
-      const index = rooms[roomId].indexOf(socket.id);
-      if (index !== -1) {
-        rooms[roomId].splice(index, 1);
-        io.to(roomId).emit("user-left", socket.id);
+      const idx = rooms[roomId].indexOf(socket.id);
+      if (idx !== -1) {
+        rooms[roomId].splice(idx, 1);
+        socket.to(roomId).emit("user-left", socket.id);
         console.log(`📤 ${socket.id} left room ${roomId}`);
-
         if (rooms[roomId].length === 0) {
           delete rooms[roomId];
           console.log(`🧹 Cleaned empty room ${roomId}`);
-        } else {
-          console.log(
-            `📦 Room ${roomId} now has ${rooms[roomId].length} user(s)`
-          );
         }
       }
     }
-
     delete userNames[socket.id];
   });
 });
