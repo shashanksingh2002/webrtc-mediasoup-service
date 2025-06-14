@@ -5,7 +5,9 @@ import { Server, Socket } from "socket.io";
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: { origin: "https://qasr-three.vercel.app" },
+  cors: {
+    origin: ["https://qasr-three.vercel.app", "http://localhost:3000"],
+  },
 });
 
 app.get("/health", (_, res) => {
@@ -29,7 +31,6 @@ const POKEMON_NAMES = [
   "Onix",
   "Lapras",
 ];
-
 function getRandomName(existing: string[]): string {
   const unused = POKEMON_NAMES.filter((n) => !existing.includes(n));
   return unused.length
@@ -50,37 +51,37 @@ const userNames: UserNames = {};
 io.on("connection", (socket: Socket) => {
   console.log("🔌 Connected:", socket.id);
 
+  // Log every incoming event
+  socket.onAny((event, ...args) => {
+    console.log("↪️ server got:", event, args);
+  });
+
   socket.on("join-room", (roomId: string) => {
     console.log(`➡️ ${socket.id} requesting to join room ${roomId}`);
     socket.join(roomId);
 
-    // initialize room
+    // initialize room array
     if (!rooms[roomId]) rooms[roomId] = [];
-    if (!rooms[roomId].includes(socket.id)) {
-      rooms[roomId].push(socket.id);
-    }
+    if (!rooms[roomId].includes(socket.id)) rooms[roomId].push(socket.id);
 
-    // assign name
-    const currentNames = Object.values(userNames);
-    const name = getRandomName(currentNames);
+    // assign a random Pokemon name
+    const name = getRandomName(Object.values(userNames));
     userNames[socket.id] = name;
     console.log(`👤 ${socket.id} assigned name: ${name}`);
 
-    // emit full user objects to the newcomer
+    // send back all existing users (id + name)
     const otherUsers = rooms[roomId]
       .filter((id) => id !== socket.id)
       .map((id) => ({ userId: id, userName: userNames[id] }));
     console.log(`📦 Emitting all-users to ${socket.id}:`, otherUsers);
     socket.emit("all-users", otherUsers);
 
-    // notify existing peers
+    // notify the room that someone joined
     socket.to(roomId).emit("user-joined-room", {
       userId: socket.id,
       userName: name,
     });
-    console.log(
-      `📣 Broadcasted join of ${socket.id} to others in room ${roomId}`
-    );
+    console.log(`📣 Broadcasted join of ${socket.id} to room ${roomId}`);
   });
 
   socket.on(
@@ -107,11 +108,10 @@ io.on("connection", (socket: Socket) => {
 
   socket.on("chat-message", (msg: string) => {
     const name = userNames[socket.id] || "Unknown";
-    const message = `${name}: ${msg}`;
     for (const roomId in rooms) {
       if (rooms[roomId].includes(socket.id)) {
-        io.to(roomId).emit("chat-message", message);
-        console.log(`💬 ${name} in room ${roomId}: "${msg}"`);
+        io.to(roomId).emit("chat-message", `${name}: ${msg}`);
+        console.log(`💬 ${name} in ${roomId}: "${msg}"`);
         break;
       }
     }
