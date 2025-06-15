@@ -8,7 +8,7 @@ const server = http.createServer(app);
 // ─── Enable CORS with credentials ───────────────────────────────────────────
 const io = new Server(server, {
   path: "/socket.io",
-  transports: ["websocket"],  // polling is fallback but WS will be tried first
+  transports: ["polling"],  // polling is fallback but WS will be tried first
   cors: {
     origin: ["https://qasr-three.vercel.app","http://localhost:3000"],
     credentials: true,
